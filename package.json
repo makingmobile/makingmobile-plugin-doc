@@ -1,0 +1,27 @@
+{
+  "name": "makingmobile-plugin-doc",
+  "version": "0.0.1-beta.1",
+  "description": "MakingMobile framework office document convert plugin",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified! Configure in package.json\" && exit 1"
+  },
+  "dependencies": {},
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/makingmobile/makingmobile-plugin-doc.git"
+  },
+  "keywords": [
+    "makingmobile",
+    "office",
+    "converter",
+    "convert",
+    "document",
+    "plugin"
+  ],
+  "author": "MakingMobile Development Team",
+  "license": "GPLv3",
+  "bugs": {
+    "url": "https://github.com/makingmobile/makingmobile-plugin-doc/issues"
+  }
+}
