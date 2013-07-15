@@ -1,110 +1,185 @@
 /*jslint sub:true */
-var CMDS = ['  last n \t show last n log entries in database'],
-    LEVEL_INFO = 10,
-    LEVEL_DEBUG = 20,
-    LEVEL_WARN = 30,
-    LEVEL_ERROR = 40,
-    format = require('util').format,
+var CMDS = ['  info \t show convert status information'],
+    PYTHON_VERSION = '2.7',
+    IMAGEMAGICK_VERSION = '6.7.6',
+    TAG_ERROR = 'error',
     path = require('path'),
-    fs = require('fs');
+    fs = require('fs'),
+    Doc = require('./doc'),
+    exec = require('child_process').exec;
 
 function find_plugin_config(config) {
     for (var i = 0; i < config.plugins.length; i++) {
-        if (config.plugins[i].name === 'log') {
+        if (config.plugins[i].name === 'doc') {
             return config.plugins[i];
         }
     }
     return null;
 }
 
-function showLast (n, db, collection) {
-    collection.find({}, {
-        'limit': n,
-        'sort': 'time'
-    }).toArray(function(err, logs) {
-        var levelstr, i, data;
-        
-        if (err) {
-            console.error(err);
-            return db.close();
-        }
-        
-        for (i = 0; i < logs.length; i++) {
-            levelstr = 'info: ',
-            data = '-----> + ';
-        
-            if (logs[i].level === LEVEL_DEBUG) {
-                levelstr = 'debug: ';
-            } else if (logs[i].level === LEVEL_WARN) {
-                levelstr = 'warn: ';
-            } else if (logs[i].level === LEVEL_ERROR) {
-                levelstr = 'error: ';
+function info (rootdir, pconfig) {
+    var rootfolder = path.resolve(rootdir, pconfig.docfolder),
+        errlist = [],
+        count = 0,
+        errcount = 0,
+        j;
+    
+    function _find (dir) {
+        var ds = fs.readdirSync(path.join(rootfolder, dir)),
+            filename, i;
+        if (ds.length === 0) return;
+        if (fs.existsSync(path.join(rootfolder, dir, 'origin'))) {
+            count++;
+            if (fs.existsSync(path.join(rootfolder, dir, TAG_ERROR))) {
+                filename = fs.readdirSync(path.join(rootfolder, dir, 'origin'))[0];
+                errlist.push(path.resolve(rootfolder, dir, 'origin', filename));
+                errcount++;
             }
-            data += levelstr;
-            data += format('%s %s \n', logs[i].time, logs[i].zone);
-            data += JSON.stringify(logs[i].msg) + '\n';
-            //data += '<-----';
-            console.log(data);
+            return;
         }
-        db.close();
-    });
+        for (i = 0; i < ds.length; i++) {
+            if (fs.lstatSync(path.join(rootfolder, dir, ds[i])).isDirectory()) {
+                _count(path.join(dir, ds[i]));
+            }  
+        }
+        return;
+    }
+    console.log('Gathering doc convert status information...');
+    _find('.');
+    if (errcount > 0) {
+        console.log('Error converting ' + errcount + ':\n');
+        for (j = 0; j < errlist.length; j++) {
+            console.log('  ' + errlist[j]);
+        }
+        console.log('\n');
+    }
+    console.log('  Total docs: ' + count + ', Total error: ' + errcount);
 }
 
 function docmd (argv, config, rootdir) {
-    var MongoClient = require('mongodb').MongoClient,
-        pconfig = {},
-        n;
+    var pconfig = {};
     if (argv.length === 0 || argv[0] === '-h' || argv[0] === '--help') {
         return console.log('Available commands: \n' + CMDS[0] + '\n');
     }
-    if (argv.length === 2 && argv[0] === 'last') {
-        n = Number(argv[1]);
-        if (n > 0 && n < 1000) {
-            pconfig = find_plugin_config(config);
-            if (!pconfig.db) {
-                return console.log('db-log is disabled, please use tail to see entries in file.');
-            }
-            MongoClient.connect(pconfig.db, function(err, db) {
-                if(err) throw err;
-                var collection = db.collection(pconfig.collection);
-                showLast(n, db, collection);
-            });
-        } else {
-            console.log('param n must between 0 and 1000');
-        }
+    if (argv[0] === 'info') {
+        pconfig = find_plugin_config(config);
+        info(rootdir, pconfig);
     }
 }
 
-function build (config, rootdir, next) {
-    var pconfig = find_plugin_config(config),
-        MongoClient = require('mongodb').MongoClient;
+function check_python (next) {
+    exec('python -V', function(error, stdout, stderr) {
+        if (error) {
+            next('Python no found');
+        } else if (('' + stderr).indexOf(PYTHON_VERSION) === -1){
+            next('Bad version: ' + stderr + ' But Python ' + PYTHON_VERSION + '.x is needed');
+        } else {
+            next();
+        }
+    });
+}
+
+function check_imageMagick (next) {
+    exec('convert --version', function(error, stdout, stderr) { 
+        if (error) {
+            next('Command "convert" no found -- perhaps imageMagick and Ghostscript not installed, or not in path environment variables');
+        } else if (('' + stdout).indexOf(IMAGEMAGICK_VERSION) === -1){
+            next('Bad imageMagick version --- ' + IMAGEMAGICK_VERSION + ' is needed');
+        } else {
+            next();
+        }
+    });
+}
+
+function pdfconvert_test (rootdir, pconfig, next) {
+    var script = path.resolve(__dirname, 'support', 'scripts', pconfig.msoffice2pdf ? 'msoffice2pdf.py' : 'unoconv'),
+        pathstr = path.resolve(__dirname, 'convertest', 'test'),
+        cmdstr = 'python "' + script + '"' + ' -o "' + pathstr + '.pdf" "' + pathstr + '.docx"',
+        option = {};
     
-    if(pconfig.db) {
-        MongoClient.connect(pconfig.db, function(err, db) {
+    option = {
+        timeout: 60 * 2 * 1000
+    };
+    exec(cmdstr, option, function(error, stdout, stderr) { 
+        if (error) {
+            next('pdf convert fail -- please check office environment');
+        } else if (fs.existsSync(path.join(__dirname, 'test.pdf'))){
+            next('pdf convert fail -- please check office environment');
+        } else {
+            next();
+        }
+    });
+}
+
+function imageconvert_test (rootdir, pconfig, next) {
+    var cmdstr = 'convert -density 96 test.pdf test.png',
+        option = {};
+    
+    option = {
+        timeout: 60 * 1 * 1000,
+        cwd: path.join(__dirname, 'convertest')
+    };
+    exec(cmdstr, option, function(error, stdout, stderr) { 
+        if (error) {
+            next('image convert fail -- please check imageMagick and Ghostscript environment');
+        } else if (fs.existsSync(path.join(__dirname, 'test.pdf'))){
+            next('image convert fail -- please check imageMagick and Ghostscript environment');
+        } else {
+            next();
+        }
+    });
+}
+
+function build (config, rootdir, next) {
+    var pconfig = find_plugin_config(config);
+    
+    if (fs.existsSync(path.join(__dirname, 'convertest', 'test-0.png'))) {
+        console.log('Doc converter: found test result image files, bypass convert test');
+    } else {
+        console.log('Doc converter: testing python...');
+        check_python(function(err) {
             if (err) {
-                console.error(err);
-                console.error('Cannot open:' + pconfig.db);
-                //Process will halt when MongoClient.connect has error
-                process.exit(1);
-                //next('log');
+                console.log('\t' + err);
+                next('Doc-plugin fail');
             } else {
-                db.close();
-                next();
+                console.log('Doc converter: testing imageMagick and Ghostscript...');
+                check_imageMagick(function(err) {
+                    if (err) {
+                        console.log('\t' + err);
+                        next('Doc-plugin fail');
+                    } else {
+                        console.log('Doc converter: testing pdf convert...');
+                        pdfconvert_test(rootdir, pconfig, function(err) {
+                            if (err) {
+                                console.log('\t' + err);
+                                next('Doc-plugin fail');
+                            } else {
+                                console.log('Doc converter: testing pdf convert...');
+                                imageconvert_test(rootdir, pconfig, function(err) {
+                                    if (err) {
+                                        console.log('\t' + err);
+                                        next('Doc-plugin fail');
+                                    } else {
+                                        console.log('Convert test success!');
+                                        next();
+                                    }
+                                });
+                            }
+                        });
+                    }
+                });
             }
         });
-    } else {
-        next();
     }
 }
 
 function init (mm) {
-    var Log = require('./log'),
-        pconfig = find_plugin_config(mm.config);
+    var pconfig = find_plugin_config(mm.config),
+        libreofficescript = path.resolve(__dirname, 'scripts', 'unoconv');
     
-    if(pconfig.file && !fs.existsSync(path.resolve(mm._rootdir, pconfig.file, '..'))){
-        mm.util.fs.mkdirr(path.resolve(rootdir, pconfig.file, '..'));
-    }
-    new Log(mm, pconfig);
+    //start a permanent listener to use by unoconv clients
+    exec('python "' + libreofficescript + '" -l');
+    new Doc(mm, pconfig);
 }
 
 exports.docmd = docmd;
