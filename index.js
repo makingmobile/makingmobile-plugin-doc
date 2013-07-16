@@ -39,13 +39,14 @@ function info (rootdir, pconfig) {
         }
         for (i = 0; i < ds.length; i++) {
             if (fs.lstatSync(path.join(rootfolder, dir, ds[i])).isDirectory()) {
-                _count(path.join(dir, ds[i]));
+                _find(path.join(dir, ds[i]));
             }  
         }
         return;
     }
-    console.log('Gathering doc convert status information...');
+    process.stdout.write('\nGathering doc convert status information... ');
     _find('.');
+    process.stdout.write('done\n\n');
     if (errcount > 0) {
         console.log('Error converting ' + errcount + ':\n');
         for (j = 0; j < errlist.length; j++) {
@@ -93,7 +94,7 @@ function check_imageMagick (next) {
 
 function pdfconvert_test (rootdir, pconfig, next) {
     var script = path.resolve(__dirname, 'support', 'scripts', pconfig.msoffice2pdf ? 'msoffice2pdf.py' : 'unoconv'),
-        pathstr = path.resolve(__dirname, 'convertest', 'test'),
+        pathstr = path.resolve(__dirname, 'support', 'convertest', 'test'),
         cmdstr = 'python "' + script + '"' + ' -o "' + pathstr + '.pdf" "' + pathstr + '.docx"',
         option = {};
     
@@ -117,7 +118,7 @@ function imageconvert_test (rootdir, pconfig, next) {
     
     option = {
         timeout: 60 * 1 * 1000,
-        cwd: path.join(__dirname, 'convertest')
+        cwd: path.join(__dirname, 'support', 'convertest')
     };
     exec(cmdstr, option, function(error, stdout, stderr) { 
         if (error) {

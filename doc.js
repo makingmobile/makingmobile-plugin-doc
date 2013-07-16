@@ -1,6 +1,7 @@
 /*jslint sub:true */
 var LibreOfficeDoctype = ['doc', 'docx', 'xml', 'txt', 'cvs', 'rtf', 'html', 'xls', 'xlsx', 'ppt', 'pptx', 'pot'],
     MsOfficeDocType = ['mht', 'docx', 'docm', 'doc', 'odt', 'xlsx', 'xls', 'xlw', 'ods', 'ppt', 'pptx', 'pptm', 'ppsx', 'pps', 'odp'],
+    IMAGE_TYPES = ['jpeg', 'gif', 'png', 'bmp', 'jpg'],
     HASH_DIR_PART_SIZE = 1,
     HASH_DIR_NUM_PARTS = 4,
     DEFAULT_MAX_FILE_SIZE = 1024*1024*6,
@@ -18,17 +19,6 @@ var LibreOfficeDoctype = ['doc', 'docx', 'xml', 'txt', 'cvs', 'rtf', 'html', 'xl
     crypto = require('crypto'),
     exec = require('child_process').exec;
 
-function intranetIpaddress (req) {
-    var addr = req.socket.remoteAddress,
-        list = this.config.allowedIpaddress,
-        i;
-    
-    for (i = 0; i < list.length; i++) {
-        if (addr.match(list[i])) return true;
-    }
-    return false;
-}
-
 /*
  * nodeSide doc-plugin class
  */
@@ -45,8 +35,8 @@ function MMP_doc(mm, plugin_config){
     plugin_config['targetImageType'] = plugin_config['targetImageType'] || DEFAULT_TARGET_IMAGE_TYPE;
     plugin_config['allowedIpaddress'] = plugin_config['allowedIpaddress'] || [/.*/];
     
-    if (!fs.existsSync(path.resolve(rootdir, plugin_config['docfolder']))) {
-        mm.util.fs.mkdirr(path.resolve(rootdir, plugin_config['docfolder']));
+    if (!fs.existsSync(path.resolve(mm._rootdir, plugin_config['docfolder']))) {
+        mm.util.fs.mkdirr(path.resolve(mm._rootdir, plugin_config['docfolder']));
     }
     this.config = plugin_config;
     this.mm = mm;
@@ -67,6 +57,18 @@ function MMP_doc(mm, plugin_config){
         self._webquery(req, res, next);
     });
 }
+
+MMP_doc.prototype._intranetIpaddress = function (req) {
+    var addr = req.socket.remoteAddress,
+        list = this.config.allowedIpaddress,
+        i;
+    
+    for (i = 0; i < list.length; i++) {
+        if (addr.match(list[i])) return true;
+    }
+    return false;
+};
+
 /*
  * upload form should has the following fields:
  *      filename origin filename with extension
@@ -75,7 +77,7 @@ function MMP_doc(mm, plugin_config){
 MMP_doc.prototype._webput = function (req, res, next) {
     var filedata, filename;
     
-    if (!this.intranetIpaddress(req)) {
+    if (!this._intranetIpaddress(req)) {
         return res.send(403, 'Forbidden');
     }
     if (req.method.toUpperCase() !== 'POST' && req.method.toUpperCase() !== 'OPTION') {
@@ -86,7 +88,7 @@ MMP_doc.prototype._webput = function (req, res, next) {
     res.set('Access-Control-Allow-Origin', req.headers['origin'] || '*');
     res.set('Access-Control-Allow-Methods', 'POST, GET, OPTIONS');
     res.set('Access-Control-Max-Age', '3628800');
-    if (req.method.toUpperCase() !== 'OPTION') {
+    if (req.method.toUpperCase() === 'OPTION') {
         return res.end();
     }
     filename = req.param('filename');
@@ -104,15 +106,19 @@ MMP_doc.prototype._webquery = function (req, res, next) {
     var md5 = req.param('md5'),
         info;
     
+    if (!this._intranetIpaddress(req)) {
+        return res.send(403, 'Forbidden');
+    }
     res.set('Access-Control-Allow-Credentials', 'true');
     res.set('Access-Control-Allow-Headers', req.headers['access-control-request-headers'] || 'origin, content-type');
     res.set('Access-Control-Allow-Origin', req.headers['origin'] || '*');
     res.set('Access-Control-Allow-Methods', 'POST, GET, OPTIONS');
     res.set('Access-Control-Max-Age', '3628800');
-    if (req.method.toUpperCase() !== 'OPTION') {
+    if (req.method.toUpperCase() === 'OPTION') {
         return res.end();
     }
     info = this.query(md5);
+    res.set('Content-Type', 'application/json;charset=utf-8');
     if (!info) {
         res.send(400, 'Bad Request');
     } else {
@@ -126,19 +132,23 @@ MMP_doc.prototype._webquery = function (req, res, next) {
  */
 MMP_doc.prototype._webget = function (req, res, next) {
     var md5 = req.param('md5'),
-        page = req.param('md5'),
+        page = req.param('page'),
         info;
     
+    if (!this._intranetIpaddress(req)) {
+        return res.send(403, 'Forbidden');
+    }
     res.set('Access-Control-Allow-Credentials', 'true');
     res.set('Access-Control-Allow-Headers', req.headers['access-control-request-headers'] || 'origin, content-type');
     res.set('Access-Control-Allow-Origin', req.headers['origin'] || '*');
     res.set('Access-Control-Allow-Methods', 'POST, GET, OPTIONS');
     res.set('Access-Control-Max-Age', '3628800');
-    if (req.method.toUpperCase() !== 'OPTION') {
+    if (req.method.toUpperCase() === 'OPTION') {
         return res.end();
     }
     info = this.get(md5, page, true);
     if (info.error !== 0) {
+        res.set('Content-Type', 'application/json;charset=utf-8');
         res.json(400, info);
     } else {
         res.sendfile(info.filepath);
@@ -202,6 +212,9 @@ MMP_doc.prototype._getinfo = function (md5) {
             pdfend = tmp[0] === filenamewithouttype + '.' + 'pdf';
         }
     }
+    if (pdfend) {
+        MSparsable = LBparsable = true;
+    }
     return {
         pathstr: pathstr,
         rootfolder: rootfolder,
@@ -226,7 +239,7 @@ MMP_doc.prototype._checkqueue = function (){
     md5 = this._queue[0];
     info = this._getinfo(md5);
     if (info && !info.finished && (info.errcount < ERROR_MAX) && (info.MSparsable || info.LBparsable)) {
-        this._convert(md5);
+        this._convert(info);
     } else {
         if (info && !info.finished) {         
             if ((info.errcount >= ERROR_MAX) || (!info.MSparsable && !info.LBparsable)) {
@@ -241,20 +254,19 @@ MMP_doc.prototype._checkqueue = function (){
     }
 };
 
-MMP_doc.prototype._convert = function (md5) {
+MMP_doc.prototype._convert = function (info) {
     var self = this,
         libreofficescript = path.resolve(__dirname, 'support', 'scripts', 'unoconv'),
         msofficescript = path.resolve(__dirname, 'support', 'scripts', 'msoffice2pdf.py'),
-        info, cmdstr, option;
+        cmdstr, option;
     
     if (this._busy) return;
     this._busy = true;
-    info = this._getinfo(md5);
     
     if (info.pdfend) {
         option = {
             timeout: this.config.imageConvertTimeout * 1000,
-            cwd: path.join(rootfolder, 'pdf')
+            cwd: path.join(info.rootfolder, 'pdf')
         };
         cmdstr = 'convert -density ' + this.config.imageDensity + 
                  ' ' + info.filenamewithouttype + '.pdf' + ' ..' + path.sep + 'image' + path.sep + 
@@ -271,7 +283,7 @@ MMP_doc.prototype._convert = function (md5) {
                 }
                 fs.writeFileSync(path.join(info.rootfolder, TAG_END), '', {encoding: 'utf8'});
             }
-            this._busy = false;
+            self._busy = false;
             process.nextTick(function () {
                 self._checkqueue();
             });
@@ -297,7 +309,7 @@ MMP_doc.prototype._convert = function (md5) {
                 }
                 fs.writeFileSync(path.join(info.rootfolder, TAG_ERROR), '' + (info.errcount + 1), {encoding: 'utf8'});
             }
-            this._busy = false;
+            self._busy = false;
             process.nextTick(function () {
                 self._checkqueue();
             });
@@ -313,6 +325,7 @@ MMP_doc.prototype._md5topath = function (md5) {
         str += md5.substr(i * HASH_DIR_PART_SIZE, HASH_DIR_PART_SIZE) + '/';
     }
     str += md5.substr(HASH_DIR_PART_SIZE * HASH_DIR_NUM_PARTS);
+    return str;
 };
 
 MMP_doc.prototype._volidmd5 = function (md5) {
@@ -331,22 +344,43 @@ MMP_doc.prototype._volidmd5 = function (md5) {
 MMP_doc.prototype.put = function (databuff, filename) {
     var self = this,
         hash = crypto.createHash('md5'),
-        md5 = '', pathstr = '';
+        md5 = '', pathstr = '',
+        filenamearr = filename.split('.'),
+        filetype = '',
+        i;
     
+    if (filenamearr.length > 1) {
+        filetype = filenamearr.pop().toLowerCase();
+    }
     hash.update(databuff);
     md5 = hash.digest('hex');
     //different filenames can have the same data, so we md5 it with filename again
     hash = crypto.createHash('md5');
-    hash.update(md5, 'utf8');
+    hash.update(filename, 'utf8');
     md5 = hash.digest('hex');
     pathstr = this._md5topath(md5);
     if (fs.existsSync(path.join(this._docfolder, pathstr))) {
+        process.nextTick(function () {
+            self._checkqueue();
+        });
         return md5;
     } else {
+        this.mm.util.fs.mkdirr(path.join(this._docfolder, pathstr));
         fs.mkdirSync(path.join(this._docfolder, pathstr, 'origin'));
         fs.mkdirSync(path.join(this._docfolder, pathstr, 'pdf'));
         fs.mkdirSync(path.join(this._docfolder, pathstr, 'image'));
         fs.writeFileSync(path.join(this._docfolder, pathstr, 'origin', filename), databuff);
+        if (filetype === 'pdf') {
+            fs.writeFileSync(path.join(this._docfolder, pathstr, 'pdf', filename), databuff);
+        } else {
+            for (i = 0; i < IMAGE_TYPES.length; i++) {
+                if (IMAGE_TYPES[i] === filetype) {
+                    fs.writeFileSync(path.join(this._docfolder, pathstr, 'image', filename), databuff);
+                    fs.writeFileSync(path.join(this._docfolder, pathstr, TAG_END), '', {encoding: 'utf8'});
+                    break;
+                }
+            }
+        }
         process.nextTick(function () {
             self._queue.push(md5);
             self._checkqueue();
@@ -365,6 +399,7 @@ MMP_doc.prototype.query = function (md5) {
     
     if (this._volidmd5(md5)) {
         info = this._getinfo(md5);
+        if (!info) return null;
         return {
             md5: md5,
             finished: info.finished,
@@ -448,6 +483,22 @@ MMP_doc.prototype.get = function (md5, page, pathOnly) {
         }
         page--;
         if (page === 0) {
+            //the origin file is already a image file
+            if (fs.existsSync(path.join(info.rootfolder, 'image', info.filename))) {
+                if (pathOnly) {
+                    return {
+                        filepath: path.join(info.rootfolder, 'image', info.filename),
+                        filename: info.filename,
+                        error: 0
+                    };
+                } else {
+                    return {
+                        data: fs.readFileSync(path.join(info.rootfolder, 'image', info.filename)),
+                        filename: info.filename,
+                        error: 0
+                    };
+                }
+            }
             if (fs.existsSync(path.join(info.rootfolder, 'image', info.filenamewithouttype + '.' + this.config.targetImageType))) {
                 if (pathOnly) {
                     return {
