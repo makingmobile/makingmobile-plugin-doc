@@ -17,7 +17,8 @@ var LibreOfficeDoctype = ['doc', 'docx', 'xml', 'txt', 'cvs', 'rtf', 'html', 'xl
     path = require('path'),
     fs = require('fs'),
     crypto = require('crypto'),
-    exec = require('child_process').exec;
+    exec = require('child_process').exec,
+    _tmpdir = path.resolve(require('os').tmpdir(), 'makingmobile', 'doc');
 
 /*
  * nodeSide doc-plugin class
@@ -37,6 +38,9 @@ function MMP_doc(mm, plugin_config){
     
     if (!fs.existsSync(path.resolve(mm._rootdir, plugin_config['docfolder']))) {
         mm.util.fs.mkdirr(path.resolve(mm._rootdir, plugin_config['docfolder']));
+    }
+    if (!fs.existsSync(_tmpdir)) {
+        mm.util.fs.mkdirr(_tmpdir);
     }
     this.config = plugin_config;
     this.mm = mm;
@@ -336,27 +340,34 @@ MMP_doc.prototype._volidmd5 = function (md5) {
  * Save file content
  * Params:
  *     md5 string       file md5 string
- *     databuff buffer  contains file data
+ *     data Buffer/string  buffer which contains file data, or file full path on disk
  *     filename string  filename 
  *      
- * this is a synchronous method(slow and cpu heavy), return md5 string. May throw error.
+ * this is a synchronous method(slow and cpu heavy), return md5 string or null. May throw error.
  */
-MMP_doc.prototype.put = function (databuff, filename) {
+MMP_doc.prototype.put = function (data, filename) {
     var self = this,
         hash = crypto.createHash('md5'),
         md5 = '', pathstr = '',
         filenamearr = filename.split('.'),
-        filetype = '',
+        filetype = '', 
+        databuff = null,
         i;
     
+    if (!data || !filename || 
+        (typeof(data) === 'string' && !fs.existsSync(data))) {
+        return null;
+    }
     if (filenamearr.length > 1) {
         filetype = filenamearr.pop().toLowerCase();
     }
-    hash.update(databuff);
-    md5 = hash.digest('hex');
-    //different filenames can have the same data, so we md5 it with filename again
-    hash = crypto.createHash('md5');
-    hash.update(filename, 'utf8');
+    if (data instanceof Buffer) {
+        databuff = data;
+    } else {
+        databuff = fs.readFileSync(data);
+    }
+    
+    hash.update(Buffer.concat([databuff, new Buffer(filename)]));
     md5 = hash.digest('hex');
     pathstr = this._md5topath(md5);
     if (fs.existsSync(path.join(this._docfolder, pathstr))) {
