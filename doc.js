@@ -87,11 +87,11 @@ MMP_doc.prototype._webput = function (req, res, next) {
     if (req.method.toUpperCase() !== 'POST' && req.method.toUpperCase() !== 'OPTION') {
         return res.send(405, 'Method Not Allowed');
     }
-    res.set('Access-Control-Allow-Credentials', 'true');
-    res.set('Access-Control-Allow-Headers', req.headers['access-control-request-headers'] || 'origin, content-type');
-    res.set('Access-Control-Allow-Origin', req.headers['origin'] || '*');
-    res.set('Access-Control-Allow-Methods', 'POST, GET, OPTIONS');
-    res.set('Access-Control-Max-Age', '3628800');
+    res.set('access-control-allow-credentials', 'true');
+    res.set('access-control-allow-headers', req.headers['access-control-request-headers'] || 'origin, content-type');
+    res.set('access-control-allow-origin', req.headers['origin'] || '*');
+    res.set('access-control-allow-methods', 'POST, GET, OPTIONS');
+    res.set('access-control-max-age', '3628800');
     if (req.method.toUpperCase() === 'OPTION') {
         return res.end();
     }
@@ -113,11 +113,11 @@ MMP_doc.prototype._webquery = function (req, res, next) {
     if (!this._intranetIpaddress(req)) {
         return res.send(403, 'Forbidden');
     }
-    res.set('Access-Control-Allow-Credentials', 'true');
-    res.set('Access-Control-Allow-Headers', req.headers['access-control-request-headers'] || 'origin, content-type');
-    res.set('Access-Control-Allow-Origin', req.headers['origin'] || '*');
-    res.set('Access-Control-Allow-Methods', 'POST, GET, OPTIONS');
-    res.set('Access-Control-Max-Age', '3628800');
+    res.set('access-control-allow-credentials', 'true');
+    res.set('access-control-allow-headers', req.headers['access-control-request-headers'] || 'origin, content-type');
+    res.set('access-control-allow-origin', req.headers['origin'] || '*');
+    res.set('access-control-allow-methods', 'POST, GET, OPTIONS');
+    res.set('access-control-max-age', '3628800');
     if (req.method.toUpperCase() === 'OPTION') {
         return res.end();
     }
@@ -142,11 +142,11 @@ MMP_doc.prototype._webget = function (req, res, next) {
     if (!this._intranetIpaddress(req)) {
         return res.send(403, 'Forbidden');
     }
-    res.set('Access-Control-Allow-Credentials', 'true');
-    res.set('Access-Control-Allow-Headers', req.headers['access-control-request-headers'] || 'origin, content-type');
-    res.set('Access-Control-Allow-Origin', req.headers['origin'] || '*');
-    res.set('Access-Control-Allow-Methods', 'POST, GET, OPTIONS');
-    res.set('Access-Control-Max-Age', '3628800');
+    res.set('access-control-allow-credentials', 'true');
+    res.set('access-control-allow-headers', req.headers['access-control-request-headers'] || 'origin, content-type');
+    res.set('access-control-allow-origin', req.headers['origin'] || '*');
+    res.set('access-control-allow-methods', 'POST, GET, OPTIONS');
+    res.set('access-control-max-age', '3628800');
     if (req.method.toUpperCase() === 'OPTION') {
         return res.end();
     }
