@@ -350,7 +350,7 @@ MMP_doc.prototype.put = function (data, filename) {
         hash = crypto.createHash('md5'),
         md5 = '', pathstr = '',
         filenamearr = filename.split('.'),
-        filetype = '', 
+        filetype = '', filenamewithouttype = '',
         databuff = null,
         i;
     
@@ -360,6 +360,10 @@ MMP_doc.prototype.put = function (data, filename) {
     }
     if (filenamearr.length > 1) {
         filetype = filenamearr.pop().toLowerCase();
+        filenamewithouttype = filenamearr.join('.');
+    } else {
+        filetype = '';
+        filenamewithouttype = filename;
     }
     if (data instanceof Buffer) {
         databuff = data;
@@ -382,7 +386,7 @@ MMP_doc.prototype.put = function (data, filename) {
         fs.mkdirSync(path.join(this._docfolder, pathstr, 'image'));
         fs.writeFileSync(path.join(this._docfolder, pathstr, 'origin', filename), databuff);
         if (filetype === 'pdf') {
-            fs.writeFileSync(path.join(this._docfolder, pathstr, 'pdf', filename), databuff);
+            fs.writeFileSync(path.join(this._docfolder, pathstr, 'pdf', filenamewithouttype + '.pdf'), databuff);
         } else {
             for (i = 0; i < IMAGE_TYPES.length; i++) {
                 if (IMAGE_TYPES[i] === filetype) {
