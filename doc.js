@@ -273,8 +273,8 @@ MMP_doc.prototype._convert = function (info) {
             cwd: path.join(info.rootfolder, 'pdf')
         };
         cmdstr = 'convert -density ' + this.config.imageDensity + 
-                 ' ' + info.filenamewithouttype + '.pdf' + ' ..' + path.sep + 'image' + path.sep + 
-                 info.filenamewithouttype + '.' + this.config.targetImageType;
+                 ' "' + info.filenamewithouttype + '.pdf"' + ' "..' + path.sep + 'image' + path.sep + 
+                 info.filenamewithouttype + '.' + this.config.targetImageType + '"';
         exec(cmdstr, option, function (error, stdout, stderr) {
             stderr = stderr.toString();
             if (error) {
