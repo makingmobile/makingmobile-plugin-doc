@@ -75,18 +75,22 @@ function check_python (next) {
         } else if (('' + stderr).indexOf(PYTHON_VERSION) === -1){
             next('Bad version: ' + stderr + ' But Python ' + PYTHON_VERSION + '.x is needed');
         } else {
+            console.log('Doc converter: Found python ' + stderr.replace(/\s+$/, ''));
             next();
         }
     });
 }
 
 function check_imageMagick (next) {
-    exec('convert --version', function(error, stdout, stderr) { 
+    exec('convert --version', function(error, stdout, stderr) {
+        var m = ('' + stdout).match(/Version:\s+ImageMagick\s+(\S+)\s+/);
+        
         if (error) {
             next('Command "convert" no found -- perhaps imageMagick and Ghostscript not installed, or not in path environment variables');
-        } else if (('' + stdout).indexOf(IMAGEMAGICK_VERSION) === -1){
-            next('Bad imageMagick version --- ' + IMAGEMAGICK_VERSION + ' is needed');
+        } else if (!m){
+            next('Bad imageMagick version --- ' + IMAGEMAGICK_VERSION + '+ is needed');
         } else {
+            console.log('Doc converter: Found imageMagick ' + m[1]);
             next();
         }
     });
@@ -104,7 +108,7 @@ function pdfconvert_test (rootdir, pconfig, next) {
     exec(cmdstr, option, function(error, stdout, stderr) { 
         if (error) {
             next('pdf convert fail -- please check office environment');
-        } else if (fs.existsSync(path.join(__dirname, 'test.pdf'))){
+        } else if (!fs.existsSync(path.join(__dirname, 'support', 'convertest', 'test.pdf'))){
             next('pdf convert fail -- please check office environment');
         } else {
             next();
@@ -123,7 +127,7 @@ function imageconvert_test (rootdir, pconfig, next) {
     exec(cmdstr, option, function(error, stdout, stderr) { 
         if (error) {
             next('image convert fail -- please check imageMagick and Ghostscript environment');
-        } else if (fs.existsSync(path.join(__dirname, 'test.pdf'))){
+        } else if (!fs.existsSync(path.join(__dirname, 'support', 'convertest', 'test-1.png'))){
             next('image convert fail -- please check imageMagick and Ghostscript environment');
         } else {
             next();
@@ -134,8 +138,8 @@ function imageconvert_test (rootdir, pconfig, next) {
 function build (config, rootdir, next) {
     var pconfig = find_plugin_config(config);
     
-    if (fs.existsSync(path.join(__dirname, 'convertest', 'test-0.png'))) {
-        console.log('Doc converter: found test result image files, bypass convert test');
+    if (fs.existsSync(path.join(__dirname, 'support', 'convertest', 'test-1.png'))) {
+        console.log('Doc converter: found test result image files, bypass converting test');
     } else {
         console.log('Doc converter: testing python...');
         check_python(function(err) {
@@ -143,7 +147,7 @@ function build (config, rootdir, next) {
                 console.log('\t' + err);
                 next('Doc-plugin fail');
             } else {
-                console.log('Doc converter: testing imageMagick and Ghostscript...');
+                console.log('Doc converter: testing imageMagick( and Ghostscript)...');
                 check_imageMagick(function(err) {
                     if (err) {
                         console.log('\t' + err);
